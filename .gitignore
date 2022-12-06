@@ -6,3 +6,4 @@
 *.bc
 *.hex
 *.bin
+*.code-workspace
