@@ -15,18 +15,20 @@ timer0_ovf_irq:
 	sbiw Z, 1								;Z(rejestry R31:R30) - 1 
 	brne timer0_ovf_irq_exit				;if Z(flaga)=0 to idziemy dalej
 	load_register_Z timer_cycles_per_second
+	
+	sts PORTB, r23	
 	com r23									;negacja ze wzg na przesuniecie
 	lsr r23									;przesuniecie bitowe
 	com r23									
 	cpi r23, 0xFE							;porownanie
 	breq reload								;powrot do 1 diody																	;
-	sts PORTB, r23	
 
 timer0_ovf_irq_exit:
 	reti									;interrupt return stack->PC
 
 reload:
-	ldi r23, 0xCF
+	ldi r23, 0x3F
+	reti
 
 ; Interrupt handler
 start:

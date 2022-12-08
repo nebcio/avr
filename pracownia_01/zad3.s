@@ -34,7 +34,7 @@ start:
 	ldi r23, 0xFF
 	sts PORTB, r23							;r23 przechowuje stan diody
 
-	load_register_8 TCCR0B, 0x01			;wybor zegara (bity 2:0) jako clk (bez preskalera)
+	load_register_8 TCCR0B, 0x01			;clk
 	load_register_8 TIMSK0, 0x01 			;enable: przerwanie przy overflow timer/counter0
 	load_register_8 TCNT0, 0x00				;rejestr timera ustawia na zera / tcnt0 daje dostep do etycji i odczytywania wartosci timera
 
