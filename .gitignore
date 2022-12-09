@@ -1,9 +1,8 @@
-### Assembler ###
-
-*.exe
 *.o
-*.obj
-*.bc
 *.hex
 *.bin
+.git
+.gitignore
 *.code-workspace
+README.md
+
