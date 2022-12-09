@@ -1,8 +1,6 @@
 *.o
 *.hex
 *.bin
-.git
-.gitignore
 *.code-workspace
 README.md
 
