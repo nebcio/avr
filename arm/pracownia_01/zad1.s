@@ -42,10 +42,34 @@ tim2:
     cmp r1, r2
     beq sequence
 
+    readreg r2, button_state
+    movw r3, #0x0000
+    cmp r2, r3
+    beq button_start
+
+    readreg r3, gpioa_idr
+    movw r7, #1
+    and r3, r3, r7
+
+    movw r2, #0x0000        @ read and save button state off
+    cmp r3, r2
+    beq button_off
+
+    movw r2, #1             @ read and handle button state on    
+    and r3, r3, r2
+    bne button_diode
+
+    bx lr
+
+button_start:
+    readreg r2, gpioa_idr
+    movw r7, #1
+    and r1, r1, r7
+    storereg button_state, r2
     bx lr
 
 button_off:
-    storereg button_state, r2
+    storereg button_state, r3
     bx lr
 
 sequence:
@@ -76,7 +100,6 @@ button_diode:
     store32 counter, 0 
 
     readreg r4, button_state
-    readreg r3, gpioa_idr       @ state 1 
     movw r2, #0xFFFF            @ for delay
     eor r4, r4, r3              @ r4 = r4 ^ r3
     beq delay                   @ if r4 == r3 then delay
