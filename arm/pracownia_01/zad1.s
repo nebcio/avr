@@ -15,11 +15,13 @@ program:
 button_state:
 .space 4
 
+led_state:
+.space 4
+
 .section .text
 
 .thumb_func
 reset:
-    @store32 gpiod_odr,   0x80000000
     store32 rcc_ahb1enr, 0x00000009
     store32 rcc_apb1enr, 0x00000001
     store32 gpiod_moder, 0x55000000
@@ -28,155 +30,101 @@ reset:
     store32 tim2_psc,    0x0000FFFF
     store32 tim2_arr,    0x0000000F
     store32 tim2_egr,    0x00000001
-    store32 counter, 1
-    store32 program, 0
+    store32 counter,        1
+    store32 program,        0
+    store32 button_state,   0
+    store32 led_state,      0x8000
     store32 nvic_iser0,  0x10000000
     b .
 
 .thumb_func
 tim2:
-    readreg r1, counter
-    add r1, r1, #1          
-    movw r2, #0xFFFF    
-    storereg counter, r1
-    cmp r1, r2
-    beq sequence
+    readreg r3, counter
+    add r3, r3, #1          
+    movw r4, #0xFFFF 
+    add r4, r4, r4   
+    storereg counter, r3
+    cmp r3, r4
+    beq after_cycle
 
-    readreg r2, button_state
-    movw r3, #0x0000
-    cmp r2, r3
-    beq button_start
+    bx lr
+
+after_cycle:
+    store32 counter, 0 
 
     readreg r3, gpioa_idr
-    movw r7, #1
-    and r3, r3, r7
+    movw r4, #1   
+    and r3, r3, r4          @ r3 = 1 | 0
 
-    movw r2, #0x0000        @ read and save button state off
-    cmp r3, r2
-    beq button_off
+    readreg r4, button_state             
+    cmp r3, r4
+    bne button_changed_state
 
-    movw r2, #1             @ read and handle button state on    
-    and r3, r3, r2
-    bne button_diode
+    b seq_shift_bits
 
     bx lr
 
-button_start:
-    readreg r2, gpioa_idr
-    movw r7, #1
-    and r1, r1, r7
-    storereg button_state, r2
-    bx lr
-
-button_off:
-    storereg button_state, r3
-    bx lr
-
-sequence:
+button_changed_state:
+    storereg button_state, r3   @ save new state
     store32 counter, 0 
 
-    readreg r1, gpioa_idr
+    movw r4, #0
+    cmp r3, r4
+    beq seq_shift_bits      @ button state 1->0 : shift bits
 
-    movw r2, #0             @ read and save button state off
-    cmp r1, r2
-    beq button_off
-
-    movw r2, #1             @ read and handle button state on    
-    and r1, r1, r2
-    bne button_diode
-
-    readreg r1, program
-    @ if program 0
-    movw r2, #0    
-    cmp r1, r2
-    beq seq_one
-
-    @ if program 1
-    movw r2, #1 
-    cmp r1, r2
-    beq seq_sec
-
-button_diode:
-    store32 counter, 0 
-
-    readreg r4, button_state
-    movw r2, #0xFFFF            @ for delay
-    eor r4, r4, r3              @ r4 = r4 ^ r3
-    beq delay                   @ if r4 == r3 then delay
-    storereg button_state, r3   @ else save button state
-
-    readreg r1, program
-    add r1, r1, #1              @ increment program
-    movw r2, #2                 @ max program   
-    cmp r1, r2                  @ if program > 3 then reset program
+    readreg r3, program
+    add r3, r3, #1              @ increment program
+    movw r4, #3                 @ max program   
+    cmp r3, r4                  @ if program = 3 then reset program
     beq reset_program 
+    storereg program, r3        @ else save program
 
-    storereg program, r1        @ else save program
+init_program_0:
+    movw r4, #0
+    cmp r3, r4
+    bne init_program_1
 
-    @ if program 0
-    movw r2, #0x8000    
-    storereg gpiod_odr, r2
+    store32 led_state, 0x8000  
+    b seq_shift_bits
 
-    @ if program 1
-    movw r2, #0xC000
-    storereg gpiod_odr, r2
+init_program_1:
+    movw r4, #1
+    cmp r3, r4
+    bne init_program_2
 
-    movw r2, 0xFFFF
-    cmp r2, r2
-    beq delay
+    store32 led_state, 0xC000   @ 1100
+    b seq_shift_bits
 
-delay:
-    sub r2, r2, #1
-    cmp r2, #0
-    bne delay
-
-    bx lr
+init_program_2:
+    movw r4, #2
+    cmp r3, r4
+    bne reset_program
+    store32 led_state, 0xE000   @ 1110
+    b seq_shift_bits
 
 reset_program:
     store32 program, 0
-    bx lr
+    store32 led_state, 0x8000  
+    b seq_shift_bits
 
-seq_one:
-    readreg r1, gpiod_odr    
+seq_shift_bits:
+    readreg r3, led_state
+    lsr r3, r3, #1
+    movw r4, #0x0800  
+    and r4, r3, r4
+    bne move_bit_to_begin
 
-    movw r2, #0x0000  
-    cmp r1, r2
-    beq reset_state_one
+    b save_moved
 
-    movw r2, #0x1000  
-    cmp r1, r2
-    beq reset_state_one
-
-    lsr r1, r1, #1
-    storereg gpiod_odr, r1
-    bx lr
-
-reset_state_one: 
-    movw r2, #0x8000
-    storereg gpiod_odr, r2
-    bx lr
-
-seq_sec:
-    readreg r1, gpiod_odr    
-
-    lsr r1, r1, #1
-    movw r2, #0x1800    @ 0001 1000 0000 0000
-    cmp r1, r2
-    beq conversion_one   
-
-    movw r2, #0x4800    @ 0100 1000 0000 0000       
-    cmp r1, r2
-    beq conversion_two
-
-    storereg gpiod_odr, r1
-    bx lr
-
-conversion_one:
-    movw r2, #0x9000    @ 1001 0000 0000 0000
-    storereg gpiod_odr, r2
-    bx lr
-
-conversion_two:
-    movw r2, #0xC000    @ 1100 0000 0000 0000
-    storereg gpiod_odr, r2
+move_bit_to_begin: 
+    movw r4, #0x8000
+    add r3, r3, r4
+    movw r4, #0x0800 
+    and r4, r3, r4
+    beq save_moved
+remove_shifted_bit:
+    sub r3, r3, r4
+save_moved:
+    storereg gpiod_odr, r3
+    storereg led_state, r3
     bx lr
